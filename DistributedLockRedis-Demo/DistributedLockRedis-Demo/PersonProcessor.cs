@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Hosting;
 using RedLockNet;
-using System.Diagnostics;
 
 namespace DistributedLockRedis_Demo;
 
@@ -10,9 +9,8 @@ public class PersonProcessor : IHostedService, IDisposable
     private readonly IReadOnlyCollection<Person> _people;
     private Timer? _timer = null;
     private const int UnlockAfterSeconds = 30;
-    private const int TryToAquireForSeconds = 30;
-    private const int RetryDelay = 2;
     private const int ProcessTimeInSeconds = 3;
+    private const int PersonPickupDelay = 5;
 
     public PersonProcessor(
         IDistributedLockFactory redlockFactory,
@@ -22,37 +20,30 @@ public class PersonProcessor : IHostedService, IDisposable
         _people = personRepository.GetPeople();
     }
 
-
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _timer = new Timer(ProcessPerson, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+        _timer = new Timer(ProcessPerson, null, TimeSpan.Zero, TimeSpan.FromSeconds(PersonPickupDelay));
 
         return Task.CompletedTask;
     }
 
     private async void ProcessPerson(object? state)
     {
-        var stopwatch = new Stopwatch();
-        stopwatch.Start();
         var random = new Random();
         var person = _people.ElementAt(random.Next(0, _people.Count));
 
         await using var redLock = await _redlockFactory.CreateLockAsync(
             person.GetKey(),
-            TimeSpan.FromSeconds(UnlockAfterSeconds),
-            TimeSpan.FromSeconds(TryToAquireForSeconds),
-            TimeSpan.FromSeconds(RetryDelay));
+            TimeSpan.FromSeconds(UnlockAfterSeconds));
 
         if (redLock.IsAcquired)
         {
-            stopwatch.Stop();
-            Console.WriteLine($"Picked up {person.Name} after {stopwatch.Elapsed.TotalSeconds:F2} seconds.");
+            Console.WriteLine($"[Lock Acquired:{DateTime.UtcNow:hh:mm:ss}] Picked up {person.Name}.");
             await Task.Delay(TimeSpan.FromSeconds(ProcessTimeInSeconds));
         }
         else
         {
-            // Exceeded retry attempts.
-            Console.WriteLine($"Failed to up {person.Name}");
+            Console.WriteLine($"[Lock Failed:{DateTime.UtcNow:hh:mm:ss}] Failed to pick up {person.Name}");
         }
     }
 
