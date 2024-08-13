@@ -12,7 +12,11 @@ InitializeRedlockFactory();
 
 builder.Services.AddSingleton<PersonFakeRepository>();
 
-builder.Services.AddHostedService<PersonProcessor>();
+builder.Services.AddSingleton<PersonProcessor>();
+
+builder.Services.AddHostedService<Client1>();
+
+builder.Services.AddHostedService<Client2>();
 
 using IHost host = builder.Build();
 
